@@ -13,5 +13,5 @@ void Test1()
 
 	int a = 10086, b = 0;
 	bs.push(&a, sizeof(a));
-	//bs.pop()
+	return;
 }
