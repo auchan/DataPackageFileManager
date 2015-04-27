@@ -6,14 +6,15 @@
 #include <cstdint>
 #include <unordered_map>
 
+#include "BinaryPack.h"
+
 enum class OpenMode
 {
 	CREATE, ALTER, READ
 };
 
-class PackageHeader
+struct PackageHeader
 {
-public:
 	uint32_t id;
 	uint32_t fileInfoLen;
 	uint32_t fileInfoCRC;
@@ -22,14 +23,16 @@ public:
 	uint32_t blockAmount;
 	uint32_t dataBlockCRC;
 	uint8_t isZip;
+
+	PackageHeader();
 };
 
-class PackageFileInfo
+struct PackageFileInfo
 {
-public:
 	std::string fileName;
 	uint32_t size;
 	uint32_t zipSize;
+	uint16_t zipformat;
 	uint32_t crc;
 	std::vector<uint32_t> blockList;
 };
@@ -52,6 +55,11 @@ public:
 
 	void getFileData(const std::string& fileName, void *data, size_t size, size_t zipSize);
 
+private:
+	void clear();
+
+	int readFileInfo();
+	void writeFileInfo();
 private:
 	std::string _packageName;
 	PackageHeader _packageHeader;

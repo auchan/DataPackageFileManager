@@ -76,6 +76,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="BinaryStream.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="pack.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="BinaryPack.h" />
+    <ClInclude Include="BinaryStream.h" />
+    <ClInclude Include="pack.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
