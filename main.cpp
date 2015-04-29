@@ -1,17 +1,39 @@
-#include "pack.h"
+#include "package.h"
 
 void Test1();
+void Test2();
 
 int main()
 {
-	Test1();
+	//Test1();
+	Test2();
 }
 
 void Test1()
 {
-	BinaryStream bs(100);
+	BinaryPack bp(100);
 
-	int a = 10086, b = 0;
-	bs.push(&a, sizeof(a));
+	std::string str = "Hello, World!";
+	bp << str;
+	bp << (uint8_t)2;
+	bp << (uint8_t)3;
+	bp << (uint8_t)3;
+
+	BinaryPack bp2(bp.GetData(), bp.GetDataSize());
+	std::string str2;
+	uint8_t a, b, c;
+	bp2 >> str2;
+	bp2 >> a >> b >> c >> c;
+
+	return;
+}
+
+void Test2()
+{
+	Package pak;
+
+	pak.open("Test2.pak", "wb");
+	pak.save();
+
 	return;
 }

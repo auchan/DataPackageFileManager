@@ -78,12 +78,13 @@
   <ItemGroup>
     <ClCompile Include="BinaryStream.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="pack.cpp" />
+    <ClCompile Include="package.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BinaryPack.h" />
     <ClInclude Include="BinaryStream.h" />
-    <ClInclude Include="pack.h" />
+    <ClInclude Include="dpfm_const.h" />
+    <ClInclude Include="package.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
