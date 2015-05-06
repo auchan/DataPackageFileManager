@@ -2,11 +2,13 @@
 
 void Test1();
 void Test2();
+void Test3();
 
 int main()
 {
 	//Test1();
-	Test2();
+	//Test2();
+	Test3();
 }
 
 void Test1()
@@ -33,7 +35,25 @@ void Test2()
 	Package pak;
 
 	pak.open("Test2.pak", "wb");
+	pak.addFile("t1", "t1.txt");
+	pak.addFile("t2", "t2.txt");
 	pak.save();
 
+	return;
+}
+
+void Test3()
+{
+	Package pak;
+
+	pak.open("Test2.pak", "rb");
+
+	size_t size, zipSize;
+	pak.getFileData("t1", NULL, &size, &zipSize);
+
+	uint8_t *data = new uint8_t[zipSize];
+	pak.getFileData("t1", data, &size, &zipSize);
+
+	fwrite(data, zipSize, 1, stdout);
 	return;
 }

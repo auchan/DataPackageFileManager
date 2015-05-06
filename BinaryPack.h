@@ -15,12 +15,16 @@ public:
 	BinaryPack& operator<< (uint32_t);
 	BinaryPack& operator<< (uint64_t);
 	BinaryPack& operator<< (const std::string&);
+	template<typename T>
+	BinaryPack& operator<< (const std::vector<T> vec);
 
-	BinaryPack& operator>> (uint8_t&) const;
-	BinaryPack& operator>> (uint16_t&) const;
-	BinaryPack& operator>> (uint32_t&) const;
-	BinaryPack& operator>> (uint64_t&) const;
-	BinaryPack& operator>> (std::string&) const;
+	BinaryPack& operator>> (uint8_t&);
+	BinaryPack& operator>> (uint16_t&);
+	BinaryPack& operator>> (uint32_t&);
+	BinaryPack& operator>> (uint64_t&);
+	BinaryPack& operator>> (std::string&);
+	template<typename T>
+	BinaryPack& operator>> (std::vector<T>&);
 
 	void* GetData() { return _streamData.data(); }
 	size_t GetDataSize() { return _streamData.size(); }
@@ -55,11 +59,25 @@ inline BinaryPack& BinaryPack::operator<<(uint64_t data)
 
 inline BinaryPack& BinaryPack::operator<<(const std::string& data)
 {
-	size_t strLen = data.length();
+	uint16_t strLen = data.length();
 	*this << strLen;
 	for (size_t i = 0; i < strLen; ++i)
 	{
 		*this << (uint8_t)data[i];
+	}
+
+	return *this;
+}
+
+template<typename T>
+inline BinaryPack& BinaryPack::operator<<(const std::vector<T> vec)
+{
+	*this << (uint16_t)vec.size();
+
+	std::vector<T>::const_iterator cur, end = vec.end();
+	for (cur = vec.begin(); cur != end; ++cur)
+	{
+		*this << *cur;
 	}
 
 	return *this;
@@ -91,7 +109,7 @@ inline BinaryPack& BinaryPack::operator>>(uint64_t& data)
 
 inline BinaryPack& BinaryPack::operator>>(std::string& data)
 {
-	size_t strLen;
+	uint16_t strLen;
 	*this >> strLen;
 
 	data.clear();
@@ -100,6 +118,23 @@ inline BinaryPack& BinaryPack::operator>>(std::string& data)
 	{
 		*this >> ch;
 		data += ch;
+	}
+
+	return *this;
+}
+
+template<typename T>
+inline BinaryPack& BinaryPack::operator>> (std::vector<T>& vec)
+{
+	vec.clear();
+	uint16_t vecSize;
+	*this >> vecSize;
+
+	for (uint16_t i = 1; i <= vecSize; ++i)
+	{
+		T blockDesp;
+		*this >> blockDesp;
+		vec.push_back(blockDesp);
 	}
 
 	return *this;

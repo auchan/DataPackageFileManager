@@ -14,10 +14,9 @@ struct PackageHeader
 	uint32_t id;
 	uint32_t fileInfoLen;
 	uint32_t fileInfoCRC;
-	uint32_t fileAmount;
-	uint32_t blockSize;
-	uint32_t blockAmount;
-	uint32_t dataBlockCRC;
+	uint16_t fileAmount;
+	uint16_t blockSize;
+	uint16_t blockAmount;
 	uint8_t isZip;
 
 	PackageHeader();
@@ -38,14 +37,18 @@ struct PackageFileInfo
 		bp << zipSize;
 		bp << zipformat;
 		bp << crc;
+		bp << blockList;
 	}
-	void unmarshal(const BinaryPack& bp) {
+	void unmarshal(BinaryPack& bp) {
 		bp >> fileName;
 		bp >> size;
 		bp >> zipSize;
 		bp >> zipformat;
 		bp >> crc;		
+		bp >> blockList;
 	}
+
+	PackageFileInfo() :zipformat(0) {}
 };
 
 class Package
@@ -64,7 +67,7 @@ public:
 
 	int alterFile(const std::string& fileName, void *data, size_t size);
 
-	void getFileData(const std::string& fileName, void *data, size_t size, size_t zipSize);
+	int getFileData(const std::string& fileName, void *data, size_t* size, size_t* zipSize);
 
 	int save();
 
@@ -73,11 +76,17 @@ private:
 
 	int readFileInfo();
 	int writeFileInfo();
+
+	std::string formatFilePath(const std::string& path);
 private:
 	std::string _packageName;
 	PackageHeader _packageHeader;
-	std::unordered_map<std::string, PackageFileInfo*> _fileInfoMap;
+
+	typedef std::unordered_map<std::string, PackageFileInfo*> PackageFileInfoPtrMap;
+	PackageFileInfoPtrMap _fileInfoMap;
+
 	FILE* _fp;
+	static const size_t HEADER_SIZE = 64;
 };
 
 #endif
