@@ -24,18 +24,34 @@ Package::Package()
 
 Package::~Package()
 {
-	clear();
+	close();
 }
 
-int Package::open(const std::string& packageName, const std::string& mode)
+int Package::open(const std::string& packageName, OpenMode mode)
 {
-	_fp = fopen(packageName.c_str(), mode.c_str());
+	std::string modeStr;
+	if (mode == OpenMode::CREATE)
+	{
+		modeStr = "wb";
+	}
+	else if (mode == OpenMode::READ_ONLY)
+	{
+		modeStr = "rb";
+	}
+	else
+	{
+		modeStr = "rb+";
+	}
+
+	_fp = fopen(packageName.c_str(), modeStr.c_str());
 	if (NULL == _fp)
 	{
 		return DPFM_FILE_OPEN_FAILED;
 	}
 
-	if (mode != "wb")
+	_packageName = packageName;
+
+	if (mode != OpenMode::CREATE)
 	{
 		return readFileInfo();
 	}
@@ -47,7 +63,7 @@ int Package::save()
 	return writeFileInfo();
 }
 
-void Package::clear()
+void Package::close()
 {
 	if (NULL != _fp)
 	{
@@ -60,6 +76,8 @@ void Package::clear()
 	{
 		delete cur->second;
 	}
+
+	_fileInfoMap.clear();
 }
 
 int Package::addFile(const std::string& fileName, const std::string& filePath)
@@ -286,7 +304,6 @@ int Package::alterFile(const std::string& fileName, const std::string& filePath)
 		if (fread(buffer, readSize, 1, sfile._fp) < 1)
 		{
 			delete [] buffer;
-			delete fileInfo;
 			return DPFM_FILE_READ_ERROR;
 		}
 
@@ -296,8 +313,7 @@ int Package::alterFile(const std::string& fileName, const std::string& filePath)
 		if (fwrite(buffer, readSize, 1, _fp) < 1)
 		{
 			delete [] buffer;
-			delete fileInfo;
-			return DPFM_FILE_READ_ERROR;
+			return DPFM_FILE_WRITE_ERROR;
 		}
 
 		uint32_t blockDesc = (blockIdx << 16) | (readSize & 0x0000FFFF);
@@ -339,7 +355,6 @@ int Package::alterFile(const std::string& fileName, const std::string& filePath)
 		if (fread(buffer, readSize, 1, sfile._fp) < 1)
 		{
 			delete [] buffer;
-			delete fileInfo;
 			return DPFM_FILE_READ_ERROR;
 		}
 
@@ -348,8 +363,7 @@ int Package::alterFile(const std::string& fileName, const std::string& filePath)
 		if (fwrite(buffer, readSize, 1, _fp) < 1)
 		{
 			delete [] buffer;
-			delete fileInfo;
-			return DPFM_FILE_READ_ERROR;
+			return DPFM_FILE_WRITE_ERROR;
 		}
 
 		uint32_t blockDesc = ((startIdx + blockCount) << 16) | (readSize & 0x0000FFFF);
@@ -421,8 +435,7 @@ int Package::alterFile(const std::string& fileName, void *data, size_t size, siz
 		if (fwrite(buffer, readSize, 1, _fp) < 1)
 		{
 			delete [] buffer;
-			delete fileInfo;
-			return DPFM_FILE_READ_ERROR;
+			return DPFM_FILE_WRITE_ERROR;
 		}
 
 		uint32_t blockDesc = (blockIdx << 16) | (readSize & 0x0000FFFF);
@@ -471,8 +484,7 @@ int Package::alterFile(const std::string& fileName, void *data, size_t size, siz
 		if (fwrite(buffer, readSize, 1, _fp) < 1)
 		{
 			delete [] buffer;
-			delete fileInfo;
-			return DPFM_FILE_READ_ERROR;
+			return DPFM_FILE_WRITE_ERROR;
 		}
 
 		uint32_t blockDesc = ((startIdx + blockCount2) << 16) | (readSize & 0x0000FFFF);
@@ -540,6 +552,33 @@ int Package::getFileData(const std::string& fileName, void *data, size_t* size, 
 	delete [] buffer;
 
 	return DPFM_OK;
+}
+
+int Package::deleteFile(const std::string& fileName)
+{
+	if (NULL == _fp)
+	{
+		return DPFM_PACK_NOT_EXIST;
+	}
+
+	std::string formattedFileName = formatFilePath(fileName);
+	if (_fileInfoMap.find(formattedFileName) == _fileInfoMap.end())
+	{
+		return DPFM_FILE_NOT_IN_PACK;
+	}
+
+	PackageFileInfo *fileInfo =  _fileInfoMap[formattedFileName];
+	std::vector<uint32_t>::iterator cur, end = fileInfo->blockList.end();
+	for (cur = fileInfo->blockList.begin(); cur != end; ++cur)
+	{
+		uint16_t blockIdx = (*cur) >> 16;
+		uint16_t len = (*cur) & 0x0000FFFF;
+
+		_idleBlockSet.insert(blockIdx);
+	}
+
+	_fileInfoMap.erase(_fileInfoMap.find(formattedFileName));
+	_packageHeader.fileAmount -= 1;
 }
 
 int Package::readFileInfo()
@@ -756,5 +795,42 @@ uint16_t Package::getIdleBlockIdx(uint16_t num, int startIdx)
 	}
 
 	return _packageHeader.blockAmount;
+}
+
+int Package::reorganize()
+{
+	if (NULL == _fp)
+	{
+		return DPFM_PACK_NOT_EXIST;
+	}
+
+	Package reoPak;
+	if (reoPak.open(_packageName + ".reo", OpenMode::CREATE) != DPFM_OK)
+	{
+		return DPFM_FILE_OPEN_FAILED;
+	}
+
+	PackageFileInfoPtrMap::iterator cur, end = _fileInfoMap.end();
+	size_t size, zipSize;
+	for (cur = _fileInfoMap.begin(); cur != end; ++cur)
+	{
+		getFileData(cur->first, NULL, &size, &zipSize);
+		uint8_t *data = new uint8_t[zipSize];
+		if (NULL == data)
+		{
+			return DPFM_MEM_ALLOC_ERROR;
+		}
+		getFileData(cur->first, data, &size, &zipSize);
+		reoPak.addFile(cur->first, data, size, zipSize);
+		delete [] data;
+	}
+	reoPak.save();
+	reoPak.close();
+
+	this->close();
+	remove(_packageName.c_str());
+	rename((_packageName + ".reo").c_str(), _packageName.c_str());
+
+	return DPFM_OK;
 }
 

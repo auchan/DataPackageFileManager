@@ -10,6 +10,11 @@
 #include "BinaryPack.h"
 #include "dpfm_const.h"
 
+enum class OpenMode
+{
+	CREATE, READ_ONLY, READ_WRITE
+};
+
 struct PackageHeader
 {
 	uint32_t id;
@@ -58,7 +63,7 @@ public:
 	Package();
 	~Package();
 
-	int open(const std::string& packageName, const std::string& mode);
+	int open(const std::string& packageName, OpenMode mode);
 
 	int addFile(const std::string& fileName, const std::string& filePath);
 
@@ -70,10 +75,15 @@ public:
 
 	int getFileData(const std::string& fileName, void *data, size_t* size, size_t* zipSize);
 
+	int deleteFile(const std::string& fileName);
+	//重新分配会使已经打开的包被关闭
+	int reorganize();
+
 	int save();
 
+	void close();
 private:
-	void clear();
+	
 
 	int readFileInfo();
 	int writeFileInfo();
