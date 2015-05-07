@@ -1,6 +1,7 @@
 #include "package.h"
 #include "ScopeFile.h"
 #include "zlib128/include/zlib.h"
+#include <cmath>
 
 PackageHeader::PackageHeader()
 		: id(2233)
@@ -34,7 +35,7 @@ int Package::open(const std::string& packageName, const std::string& mode)
 		return DPFM_FILE_OPEN_FAILED;
 	}
 
-	if (mode == "rb")
+	if (mode != "wb")
 	{
 		return readFileInfo();
 	}
@@ -93,9 +94,13 @@ int Package::addFile(const std::string& fileName, const std::string& filePath)
 
 	uint8_t *buffer = new uint8_t[_packageHeader.blockSize];
 	fseek(sfile._fp, 0, SEEK_SET);
-	fseek(_fp, HEADER_SIZE + _packageHeader.blockAmount * _packageHeader.blockSize, SEEK_SET);
-	uLong crc = adler32(NULL, Z_NULL, NULL);
 
+	uint16_t blockNum = std::ceil((double)fileInfo->zipSize / _packageHeader.blockSize);
+	uint16_t startIdx = getIdleBlockIdx(blockNum);
+	fseek(_fp, HEADER_SIZE + startIdx * _packageHeader.blockSize, SEEK_SET);
+	
+	uLong crc = adler32(NULL, Z_NULL, NULL);
+	uint16_t blockCount = 0;
 	uint32_t fileSize = fileInfo->size;
 	while (!feof(sfile._fp) && fileSize != 0)
 	{
@@ -127,10 +132,21 @@ int Package::addFile(const std::string& fileName, const std::string& filePath)
 			return DPFM_FILE_READ_ERROR;
 		}
 
-		uint32_t blockDesc = (_packageHeader.blockAmount << 16) | (readSize & 0x0000FFFF);
+		uint32_t blockDesc = ((startIdx + blockCount) << 16) | (readSize & 0x0000FFFF);
 		fileInfo->blockList.push_back(blockDesc);
 
-		_packageHeader.blockAmount += 1;
+		std::set<uint16_t>::const_iterator idleIdx = _idleBlockSet.find(startIdx + blockCount);
+		if (idleIdx != _idleBlockSet.end())
+		{
+			_idleBlockSet.erase(idleIdx);
+		}
+
+
+		if (startIdx + blockCount == _packageHeader.blockAmount)
+		{
+			_packageHeader.blockAmount += 1;
+		}
+		blockCount += 1;
 	}
 
 	fileInfo->crc = crc;
@@ -142,19 +158,342 @@ int Package::addFile(const std::string& fileName, const std::string& filePath)
 	return DPFM_OK;
 }
 
-int Package::addFile(const std::string& fileName, void *data, size_t size)
+int Package::addFile(const std::string& fileName, void *data, size_t size, size_t zipSize)
 {
-	return 0;
+	if (NULL == _fp)
+	{
+		return DPFM_PACK_NOT_EXIST;
+	}
+
+	std::string formattedFileName = formatFilePath(fileName);
+	if (_fileInfoMap.find(formattedFileName) != _fileInfoMap.end())
+	{
+		return alterFile(formattedFileName, data, size, zipSize);
+	}
+
+	PackageFileInfo* fileInfo = new PackageFileInfo();
+	if (NULL == fileInfo)
+	{
+		return DPFM_MEM_ALLOC_ERROR;
+	}
+
+	fileInfo->size = size;
+	fileInfo->zipSize = zipSize;
+	fileInfo->fileName = formattedFileName;
+
+	uint16_t blockNum = std::ceil((double)fileInfo->zipSize / _packageHeader.blockSize);
+	uint16_t startIdx = getIdleBlockIdx(blockNum);
+	fseek(_fp, HEADER_SIZE + startIdx * _packageHeader.blockSize, SEEK_SET);
+	
+	uLong crc = adler32(NULL, Z_NULL, NULL);
+	uint8_t *buffer = NULL;
+	uint16_t blockCount = 0;
+	uint32_t fileSize = fileInfo->zipSize;
+	while (fileSize != 0)
+	{
+		uint32_t readSize;
+		if (fileSize > _packageHeader.blockSize)
+		{
+			readSize = _packageHeader.blockSize;
+			fileSize -= _packageHeader.blockSize;
+		}
+		else
+		{
+			readSize = fileSize;
+			fileSize = 0;
+		}
+
+		buffer = (uint8_t*)data + blockCount*_packageHeader.blockSize;
+		crc = adler32(crc, buffer, readSize);
+
+		if (fwrite(buffer, readSize, 1, _fp) < 1)
+		{
+			delete fileInfo;
+			return DPFM_FILE_READ_ERROR;
+		}
+
+		uint32_t blockDesc = ((startIdx + blockCount) << 16) | (readSize & 0x0000FFFF);
+		fileInfo->blockList.push_back(blockDesc);
+
+		std::set<uint16_t>::const_iterator idleIdx = _idleBlockSet.find(startIdx + blockCount);
+		if (idleIdx != _idleBlockSet.end())
+		{
+			_idleBlockSet.erase(idleIdx);
+		}
+
+
+		if (startIdx + blockCount == _packageHeader.blockAmount)
+		{
+			_packageHeader.blockAmount += 1;
+		}
+		blockCount += 1;
+	}
+
+	fileInfo->crc = crc;
+	_fileInfoMap.insert(std::make_pair(formattedFileName, fileInfo));
+	_packageHeader.fileAmount += 1;
+
+	return DPFM_OK;
 }
 
 int Package::alterFile(const std::string& fileName, const std::string& filePath)
 {
-	return 0;
+	if (NULL == _fp)
+	{
+		return DPFM_PACK_NOT_EXIST;
+	}
+
+	std::string formattedFileName = formatFilePath(fileName);
+	if (_fileInfoMap.find(formattedFileName) == _fileInfoMap.end())
+	{
+		return DPFM_FILE_NOT_EXIST;
+	}
+
+	ScopeFile sfile(filePath);
+	if (NULL == sfile._fp)
+	{
+		return DPFM_FILE_NOT_EXIST;
+	}
+
+	PackageFileInfo* fileInfo = _fileInfoMap[formattedFileName];
+
+	fseek(sfile._fp, 0, SEEK_END);
+	fileInfo->size = ftell(sfile._fp);
+	fileInfo->zipSize = fileInfo->size;
+
+	uint8_t *buffer = new uint8_t[_packageHeader.blockSize];
+	fseek(sfile._fp, 0, SEEK_SET);
+
+	uLong crc = adler32(NULL, Z_NULL, NULL);
+	uint32_t fileSize = fileInfo->size;
+	std::vector<uint32_t>::iterator cur, end = fileInfo->blockList.end();
+	for (cur = fileInfo->blockList.begin(); cur != end; ++cur)
+	{
+		uint16_t blockIdx = (*cur) >> 16;
+		uint16_t len = (*cur) & 0x0000FFFF;
+		uint32_t readSize;
+		if (fileSize > _packageHeader.blockSize)
+		{
+			readSize = _packageHeader.blockSize;
+			fileSize -= _packageHeader.blockSize;
+		}
+		else
+		{
+			readSize = fileSize;
+			fileSize = 0;
+		}
+
+		if (fread(buffer, readSize, 1, sfile._fp) < 1)
+		{
+			delete [] buffer;
+			delete fileInfo;
+			return DPFM_FILE_READ_ERROR;
+		}
+
+		crc = adler32(crc, buffer, readSize);
+
+		fseek(_fp, HEADER_SIZE + blockIdx * _packageHeader.blockSize, SEEK_SET);
+		if (fwrite(buffer, readSize, 1, _fp) < 1)
+		{
+			delete [] buffer;
+			delete fileInfo;
+			return DPFM_FILE_READ_ERROR;
+		}
+
+		uint32_t blockDesc = (blockIdx << 16) | (readSize & 0x0000FFFF);
+		*cur = blockDesc;
+
+		if (fileSize == 0)
+		{
+			std::vector<uint32_t>::iterator un = ++cur;
+			for (un; un != end; ++un)
+			{
+				blockIdx = (*un) >> 16;
+				_idleBlockSet.insert(blockIdx);
+			}
+			fileInfo->blockList.erase(cur, end);
+			break;
+		}
+	}
+	
+
+	uint16_t blockNum = std::ceil((double)fileSize / _packageHeader.blockSize);
+	uint16_t startIdx = getIdleBlockIdx(blockNum);
+	fseek(_fp, HEADER_SIZE + startIdx * _packageHeader.blockSize, SEEK_SET);
+	
+	uint16_t blockCount = 0;
+	while (!feof(sfile._fp) && fileSize != 0)
+	{
+		uint32_t readSize;
+		if (fileSize > _packageHeader.blockSize)
+		{
+			readSize = _packageHeader.blockSize;
+			fileSize -= _packageHeader.blockSize;
+		}
+		else
+		{
+			readSize = fileSize;
+			fileSize = 0;
+		}
+
+		if (fread(buffer, readSize, 1, sfile._fp) < 1)
+		{
+			delete [] buffer;
+			delete fileInfo;
+			return DPFM_FILE_READ_ERROR;
+		}
+
+		crc = adler32(crc, buffer, readSize);
+
+		if (fwrite(buffer, readSize, 1, _fp) < 1)
+		{
+			delete [] buffer;
+			delete fileInfo;
+			return DPFM_FILE_READ_ERROR;
+		}
+
+		uint32_t blockDesc = ((startIdx + blockCount) << 16) | (readSize & 0x0000FFFF);
+		fileInfo->blockList.push_back(blockDesc);
+
+		std::set<uint16_t>::const_iterator idleIdx = _idleBlockSet.find(startIdx + blockCount);
+		if (idleIdx != _idleBlockSet.end())
+		{
+			_idleBlockSet.erase(idleIdx);
+		}
+
+		if (startIdx + blockCount == _packageHeader.blockAmount)
+		{
+			_packageHeader.blockAmount += 1;
+		}
+		blockCount += 1;
+	}
+
+	fileInfo->crc = crc;
+
+	delete [] buffer;
+
+	return DPFM_OK;
 }
 
-int Package::alterFile(const std::string& fileName, void *data, size_t size)
+int Package::alterFile(const std::string& fileName, void *data, size_t size, size_t zipSize)
 {
-	return 0;
+	if (NULL == _fp)
+	{
+		return DPFM_PACK_NOT_EXIST;
+	}
+
+	std::string formattedFileName = formatFilePath(fileName);
+	if (_fileInfoMap.find(formattedFileName) == _fileInfoMap.end())
+	{
+		return DPFM_FILE_NOT_EXIST;
+	}
+
+	PackageFileInfo* fileInfo = _fileInfoMap[formattedFileName];
+
+	fileInfo->size = size;
+	fileInfo->zipSize = zipSize;
+
+	uint8_t *buffer;
+	uint16_t blockCount = 0;
+	uLong crc = adler32(NULL, Z_NULL, NULL);
+	uint32_t fileSize = fileInfo->zipSize;
+	std::vector<uint32_t>::iterator cur, end = fileInfo->blockList.end();
+	for (cur = fileInfo->blockList.begin(); cur != end; ++cur)
+	{
+		uint16_t blockIdx = (*cur) >> 16;
+		uint16_t len = (*cur) & 0x0000FFFF;
+		uint32_t readSize;
+		if (fileSize > _packageHeader.blockSize)
+		{
+			readSize = _packageHeader.blockSize;
+			fileSize -= _packageHeader.blockSize;
+		}
+		else
+		{
+			readSize = fileSize;
+			fileSize = 0;
+		}
+
+		buffer = (uint8_t*)data + blockCount*_packageHeader.blockSize;
+		crc = adler32(crc, buffer, readSize);
+
+		fseek(_fp, HEADER_SIZE + blockIdx * _packageHeader.blockSize, SEEK_SET);
+		if (fwrite(buffer, readSize, 1, _fp) < 1)
+		{
+			delete [] buffer;
+			delete fileInfo;
+			return DPFM_FILE_READ_ERROR;
+		}
+
+		uint32_t blockDesc = (blockIdx << 16) | (readSize & 0x0000FFFF);
+		*cur = blockDesc;
+		
+		blockCount += 1;
+
+		if (fileSize == 0)
+		{
+			std::vector<uint32_t>::iterator un = ++cur;
+			for (un; un != end; ++un)
+			{
+				blockIdx = (*un) >> 16;
+				_idleBlockSet.insert(blockIdx);
+			}
+			fileInfo->blockList.erase(cur, end);
+			break;
+		}
+
+	}
+	
+
+	uint16_t blockNum = std::ceil((double)fileSize / _packageHeader.blockSize);
+	uint16_t startIdx = getIdleBlockIdx(blockNum);
+	fseek(_fp, HEADER_SIZE + startIdx * _packageHeader.blockSize, SEEK_SET);
+	
+	uint16_t blockCount2 = 0;
+	while (fileSize != 0)
+	{
+		uint32_t readSize;
+		if (fileSize > _packageHeader.blockSize)
+		{
+			readSize = _packageHeader.blockSize;
+			fileSize -= _packageHeader.blockSize;
+		}
+		else
+		{
+			readSize = fileSize;
+			fileSize = 0;
+		}
+
+		buffer = (uint8_t*)data + (blockCount + blockCount2)*_packageHeader.blockSize;
+
+		crc = adler32(crc, buffer, readSize);
+
+		if (fwrite(buffer, readSize, 1, _fp) < 1)
+		{
+			delete [] buffer;
+			delete fileInfo;
+			return DPFM_FILE_READ_ERROR;
+		}
+
+		uint32_t blockDesc = ((startIdx + blockCount2) << 16) | (readSize & 0x0000FFFF);
+		fileInfo->blockList.push_back(blockDesc);
+
+		std::set<uint16_t>::const_iterator idleIdx = _idleBlockSet.find(startIdx + blockCount2);
+		if (idleIdx != _idleBlockSet.end())
+		{
+			_idleBlockSet.erase(idleIdx);
+		}
+
+		if (startIdx + blockCount2 == _packageHeader.blockAmount)
+		{
+			_packageHeader.blockAmount += 1;
+		}
+		blockCount2 += 1;
+	}
+
+	fileInfo->crc = crc;
+
+	return DPFM_OK;
 }
 
 int Package::getFileData(const std::string& fileName, void *data, size_t* size, size_t* zipSize)
@@ -278,6 +617,8 @@ int Package::readFileInfo()
 			fileInfo->unmarshal(bp);
 			_fileInfoMap.insert(std::make_pair(fileInfo->fileName, fileInfo));
 		}
+
+		bp >> _idleBlockSet;
 	}
 	while (0);
 
@@ -309,6 +650,7 @@ int Package::writeFileInfo()
 		{
 			cur->second->marshal(bp);
 		}
+		bp << _idleBlockSet;
 
 		_packageHeader.fileInfoLen = bp.GetDataSize();
 		if (fwrite(&(_packageHeader.fileInfoLen), sizeof(_packageHeader.fileInfoLen), 1, _fp) != 1)
@@ -378,5 +720,41 @@ std::string Package::formatFilePath(const std::string& path)
 	}
 
 	return formatPath;
+}
+
+uint16_t Package::getIdleBlockIdx(uint16_t num, int startIdx)
+{
+	if (num > _idleBlockSet.size() || num <= 0)
+	{
+		return _packageHeader.blockAmount;
+	}
+
+	std::set<uint16_t>::iterator cur;
+	std::set<uint16_t>::iterator pre = _idleBlockSet.begin(), end = _idleBlockSet.end();
+	uint16_t count = 0;
+	for (cur = pre; cur != end; ++cur)
+	{
+		if (*cur < startIdx)
+			continue;
+
+		if (cur == pre || *cur - *(pre) == 1)
+		{
+			count += 1;
+		}
+		else
+		{
+			count = 1;
+		}
+
+
+		if (count == num)
+		{
+			return *cur;
+		}
+
+		pre = cur;
+	}
+
+	return _packageHeader.blockAmount;
 }
 

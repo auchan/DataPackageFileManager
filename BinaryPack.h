@@ -2,6 +2,8 @@
 #define _BINARY_PACK_H_
 
 #include "BinaryStream.h"
+#include <vector>
+#include <set>
 
 class BinaryPack
 {
@@ -17,6 +19,8 @@ public:
 	BinaryPack& operator<< (const std::string&);
 	template<typename T>
 	BinaryPack& operator<< (const std::vector<T> vec);
+	template<typename T>
+	BinaryPack& operator<< (const std::set<T> set);
 
 	BinaryPack& operator>> (uint8_t&);
 	BinaryPack& operator>> (uint16_t&);
@@ -25,6 +29,8 @@ public:
 	BinaryPack& operator>> (std::string&);
 	template<typename T>
 	BinaryPack& operator>> (std::vector<T>&);
+	template<typename T>
+	BinaryPack& operator>> (std::set<T>&);
 
 	void* GetData() { return _streamData.data(); }
 	size_t GetDataSize() { return _streamData.size(); }
@@ -83,6 +89,20 @@ inline BinaryPack& BinaryPack::operator<<(const std::vector<T> vec)
 	return *this;
 }
 
+template<typename T>
+BinaryPack& BinaryPack::operator<< (const std::set<T> set)
+{
+	*this << (uint16_t)set.size();
+	
+	std::set<T>::const_iterator cur, end = set.end();
+	for (cur = set.begin(); cur != end; ++cur)
+	{
+		*this << *cur;
+	}
+
+	return *this;
+}
+
 inline BinaryPack& BinaryPack::operator>>(uint8_t& data)
 {
 	_streamData.pop(&data, 1);
@@ -132,9 +152,26 @@ inline BinaryPack& BinaryPack::operator>> (std::vector<T>& vec)
 
 	for (uint16_t i = 1; i <= vecSize; ++i)
 	{
-		T blockDesp;
-		*this >> blockDesp;
-		vec.push_back(blockDesp);
+		T elemValue;
+		*this >> elemValue;
+		vec.push_back(elemValue);
+	}
+
+	return *this;
+}
+
+template<typename T>
+BinaryPack& BinaryPack::operator>> (std::set<T>& set)
+{
+	set.clear();
+	uint16_t setSize;
+	*this >> setSize;
+
+	for (uint16_t i = 1; i <= setSize; ++i)
+	{
+		T elemValue;
+		*this >> elemValue;
+		set.insert(elemValue);
 	}
 
 	return *this;

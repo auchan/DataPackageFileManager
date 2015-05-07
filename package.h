@@ -4,7 +4,8 @@
 #include <string>
 #include <vector>
 #include <cstdint>
-#include <unordered_map>
+#include <map>
+#include <set>
 
 #include "BinaryPack.h"
 #include "dpfm_const.h"
@@ -61,11 +62,11 @@ public:
 
 	int addFile(const std::string& fileName, const std::string& filePath);
 
-	int addFile(const std::string& fileName, void *data, size_t size);
+	int addFile(const std::string& fileName, void *data, size_t size, size_t zipSize);
 
 	int alterFile(const std::string& fileName, const std::string& filePath);
 
-	int alterFile(const std::string& fileName, void *data, size_t size);
+	int alterFile(const std::string& fileName, void *data, size_t size, size_t zipSize);
 
 	int getFileData(const std::string& fileName, void *data, size_t* size, size_t* zipSize);
 
@@ -78,12 +79,16 @@ private:
 	int writeFileInfo();
 
 	std::string formatFilePath(const std::string& path);
+	uint16_t getIdleBlockIdx(uint16_t num, int startIdx = -1);
+
 private:
 	std::string _packageName;
 	PackageHeader _packageHeader;
 
-	typedef std::unordered_map<std::string, PackageFileInfo*> PackageFileInfoPtrMap;
+	typedef std::map<std::string, PackageFileInfo*> PackageFileInfoPtrMap;
 	PackageFileInfoPtrMap _fileInfoMap;
+
+	std::set<uint16_t> _idleBlockSet;
 
 	FILE* _fp;
 	static const size_t HEADER_SIZE = 64;
