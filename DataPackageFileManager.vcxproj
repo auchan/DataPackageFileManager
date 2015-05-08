@@ -81,13 +81,17 @@
     <ClCompile Include="BinaryStream.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="package.cpp" />
+    <ClCompile Include="PackageMgr.cpp" />
+    <ClCompile Include="utility\BrowseDir.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BinaryPack.h" />
     <ClInclude Include="BinaryStream.h" />
     <ClInclude Include="dpfm_const.h" />
     <ClInclude Include="package.h" />
+    <ClInclude Include="PackageMgr.h" />
     <ClInclude Include="ScopeFile.h" />
+    <ClInclude Include="utility\BrowseDir.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

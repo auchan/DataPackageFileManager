@@ -9,5 +9,6 @@
 #define DPFM_MEM_ALLOC_ERROR 5
 #define DPFM_FILE_READ_ERROR 6
 #define DPFM_FILE_NOT_IN_PACK 7
+#define DPFM_FILE_PATH_INVALID 8
 
 #endif

@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="utility">
+      <UniqueIdentifier>{0a6c107a-a4bb-4e8d-a024-93d19d6d7be1}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -23,6 +26,12 @@
     </ClCompile>
     <ClCompile Include="package.cpp">
       <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="PackageMgr.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="utility\BrowseDir.cpp">
+      <Filter>utility</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -40,6 +49,12 @@
     </ClInclude>
     <ClInclude Include="ScopeFile.h">
       <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="PackageMgr.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="utility\BrowseDir.h">
+      <Filter>utility</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

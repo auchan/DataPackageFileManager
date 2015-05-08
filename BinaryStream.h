@@ -49,7 +49,7 @@ inline int BinaryStream::push(const void* data, size_t size)
 		else
 		{
 			//WARNING
-			realloc(_data, _capacity);
+			_data = realloc(_data, _capacity);
 		}
 	}
 	if (NULL == _data)
@@ -60,6 +60,7 @@ inline int BinaryStream::push(const void* data, size_t size)
 	memcpy((uint8_t *)_data + _pos, data, size);
 	_pos += size;
 	_size += size;
+	return 0;
 }
 
 inline void BinaryStream::pop(void* data, size_t size)

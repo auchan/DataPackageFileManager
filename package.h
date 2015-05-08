@@ -9,6 +9,7 @@
 
 #include "BinaryPack.h"
 #include "dpfm_const.h"
+#include "ScopeFile.h"
 
 enum class OpenMode
 {
@@ -63,7 +64,7 @@ public:
 	Package();
 	~Package();
 
-	int open(const std::string& packageName, OpenMode mode);
+	int open(const std::string& packageName, OpenMode mode, bool isZip = false);
 
 	int addFile(const std::string& fileName, const std::string& filePath);
 
@@ -76,6 +77,8 @@ public:
 	int getFileData(const std::string& fileName, void *data, size_t* size, size_t* zipSize);
 
 	int deleteFile(const std::string& fileName);
+
+	bool isZip() { return (bool)_packageHeader.isZip; }
 	//重新分配会使已经打开的包被关闭
 	int reorganize();
 
@@ -91,6 +94,8 @@ private:
 	std::string formatFilePath(const std::string& path);
 	uint16_t getIdleBlockIdx(uint16_t num, int startIdx = -1);
 
+	int addFileCore(const ScopeFile& sfile, PackageFileInfo* fileInfo, size_t remainSize);
+	int addFileCore(void* data, PackageFileInfo* fileInfo, size_t remainSize);
 private:
 	std::string _packageName;
 	PackageHeader _packageHeader;
