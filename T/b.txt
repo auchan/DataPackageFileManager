@@ -173,9 +173,7 @@ void Test9()
 {
 	PackageMgr& mgr = PackageMgr::getInstance();
 
-	//mgr.packDir("T", "T.pak", true);
-	mgr.addFile("T/a.txt", "hi\n", 3);
-	mgr.addFile("T/b.txt", "hello\n", 6);
+	mgr.packDir("T", "T.pak", true);
 
 	printFile(mgr, "T/a.txt");
 	printFile(mgr, "T/b.txt");

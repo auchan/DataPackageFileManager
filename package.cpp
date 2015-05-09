@@ -31,7 +31,7 @@ int Package::open(const std::string& packageName, OpenMode mode, bool isZip)
 	std::string modeStr;
 	if (mode == OpenMode::CREATE)
 	{
-		modeStr = "wb";
+		modeStr = "w+b";
 		if (isZip == true)
 		{
 			_packageHeader.isZip = 1;
@@ -513,7 +513,8 @@ int Package::getFileData(const std::string& fileName, void *data, size_t* size, 
 
 		remainSize -= readSize;
 
-		fseek(_fp, HEADER_SIZE + blockIdx * _packageHeader.blockSize, SEEK_SET);
+		int r = fseek(_fp, HEADER_SIZE + blockIdx * _packageHeader.blockSize, SEEK_SET);
+		int l = ftell(_fp);
 
 		if (fread((uint8_t *)data + offset * _packageHeader.blockSize, readSize, 1, _fp) != 1)
 		{
@@ -556,6 +557,8 @@ int Package::deleteFile(const std::string& fileName)
 
 	_fileInfoMap.erase(_fileInfoMap.find(formattedFileName));
 	_packageHeader.fileAmount -= 1;
+
+	return DPFM_OK;
 }
 
 int Package::readFileInfo()
@@ -718,6 +721,8 @@ int Package::writeFileInfo()
 		}
 	}
 	while (0);
+
+	fflush(_fp);
 
 	return ret;
 }

@@ -3,7 +3,6 @@
 #include "zlib128/include/zlib.h"
 
 PackageMgr::PackageMgr()
-	: _curPak(NULL)
 {
 
 }
@@ -15,33 +14,40 @@ PackageMgr::~PackageMgr()
 	{
 		if (cur->second != NULL)
 		{
+			cur->second->save();
 			delete cur->second;
 			cur->second = NULL;
 		}
 	}
 }
 
+PackageMgr& PackageMgr::getInstance()
+{
+	static PackageMgr mgr;
+	return mgr;
+}
+
 int PackageMgr::packDir(const std::string& dirName, const std::string& pakName, bool isZip)
 {
-	if (_curPak != NULL)
+	if (_pakMap.find(pakName) != _pakMap.end())
 	{
-		// do something
-		return -1;
+		return DPFM_PAK_ALREADY_OPEN;
 	}
 
-	_curPak = new Package();
+	Package* curPak = new Package();
 
-	_curPak->open(pakName, OpenMode::CREATE, isZip);
+	curPak->open(pakName, OpenMode::CREATE, isZip);
 
-	_pakMap.insert(std::make_pair(pakName, _curPak));
+	_pakMap.insert(std::make_pair(pakName, curPak));
 
 	setBrowseDir(dirName);
-	if (beginBrowse("*.*") == true)
+	if (beginBrowse("*.*") == false)
 	{
-
+		return DPFM_BROWSE_DIR_INTERRUPT;
 	}
+	curPak->save();
 
-	_curPak->save();
+	return DPFM_OK;
 }
 
 bool PackageMgr::processFile(const std::string& filename)
@@ -57,29 +63,40 @@ bool PackageMgr::processFile(const std::string& filename)
 	return false;
 }
 
-int PackageMgr::addFile(const std::string& fileName, const std::string& filePath)
+Package* PackageMgr::getPakOfFile(const std::string& fileName)
 {
-	if (fileName.find_first_of('/') == fileName.npos)
-	{
-		return DPFM_FILE_PATH_INVALID;
-	}
-
+	Package* curPak = NULL;
 	std::string pakName = fileName.substr(0, fileName.find_first_of('/')) + ".pak";
-
-	Package* curPak;
 	if (_pakMap.find(pakName) == _pakMap.end())
 	{
 		Package* pak = new Package();
 		int ret = pak->open(pakName, OpenMode::READ_WRITE);
 		if (ret != DPFM_OK)
 		{
-			return ret;
+			return NULL;
 		}
 		curPak = pak;
+		_pakMap.insert(std::make_pair(pakName, curPak));
 	}
 	else
 	{
 		curPak = _pakMap[pakName];
+	}
+
+	return curPak;
+}
+
+int PackageMgr::addFile(const std::string& fileName, const std::string& filePath)
+{
+	if (fileName.find_first_of('/') == fileName.npos)
+	{
+		return DPFM_FILE_PATH_INVALID;
+	}
+	
+	Package* curPak = getPakOfFile(fileName);
+	if (curPak == NULL)
+	{
+		return DPFM_PACK_NOT_EXIST;
 	}
 
 	if (curPak->isZip())
@@ -121,35 +138,60 @@ int PackageMgr::addFile(const std::string& fileName, const std::string& filePath
 	return DPFM_OK;
 }
 
-int addFile(const std::string& fileName, void *data, size_t size, size_t zipSize);
-
-int alterFile(const std::string& fileName, const std::string& filePath);
-
-int alterFile(const std::string& fileName, void *data, size_t size, size_t zipSize);
-
-int PackageMgr::getFileData(const std::string& fileName, void *data, size_t* size, size_t* zipSize)
+int PackageMgr::addFile(const std::string& fileName, void *data, size_t size)
 {
 	if (fileName.find_first_of('/') == fileName.npos)
 	{
 		return DPFM_FILE_PATH_INVALID;
 	}
 
-	std::string pakName = fileName.substr(0, fileName.find_first_of('/')) + ".pak";
-
-	Package* curPak;
-	if (_pakMap.find(pakName) == _pakMap.end())
+	Package* curPak = getPakOfFile(fileName);
+	if (curPak == NULL)
 	{
-		Package* pak = new Package();
-		int ret = pak->open(pakName, OpenMode::READ_WRITE);
+		return DPFM_PACK_NOT_EXIST;
+	}
+
+	if (curPak->isZip())
+	{
+		size_t zipfsize = compressBound(size);
+		uint8_t* buffer = new uint8_t[zipfsize];
+		compress(buffer, (uLongf *)&zipfsize, (uint8_t*)data, size);
+
+		int ret = curPak->addFile(fileName, buffer, size, zipfsize);
+		if (ret != DPFM_OK)
+		{
+			delete [] buffer;
+			return ret;
+		}
+		
+		curPak->save();
+		delete [] buffer;
+	}
+	else
+	{
+		int ret = curPak->addFile(fileName, (uint8_t*)data, size, size);
 		if (ret != DPFM_OK)
 		{
 			return ret;
 		}
-		curPak = pak;
+		curPak->save();
 	}
-	else
+
+	return DPFM_OK;
+}
+
+
+int PackageMgr::getFileData(const std::string& fileName, void *data, size_t* size)
+{
+	if (fileName.find_first_of('/') == fileName.npos)
 	{
-		curPak = _pakMap[pakName];
+		return DPFM_FILE_PATH_INVALID;
+	}
+
+	Package* curPak = getPakOfFile(fileName);
+	if (curPak == NULL)
+	{
+		return DPFM_PACK_NOT_EXIST;
 	}
 
 	size_t fsize, zipfsize;
@@ -162,31 +204,49 @@ int PackageMgr::getFileData(const std::string& fileName, void *data, size_t* siz
 	if (data == NULL)
 	{
 		*size = fsize;
-		*zipSize = zipfsize;
 		return DPFM_OK;
-	}
-
-	uint8_t *buffer = new uint8_t[zipfsize];
-	ret = curPak->getFileData(fileName, buffer, &fsize, &zipfsize);
-	if (ret != DPFM_OK)
-	{
-		return ret;
 	}
 
 	if (curPak->isZip())
 	{
-		uint8_t *buffer2 = new uint8_t[fsize];
-		uncompress(buffer2, (uLongf *)&fsize, buffer, zipfsize);
-		memcpy(data, buffer2, fsize);
 
-		delete [] buffer2;
+		uint8_t *buffer = new uint8_t[zipfsize];
+		ret = curPak->getFileData(fileName, buffer, &fsize, &zipfsize);
+		if (ret != DPFM_OK)
+		{
+			delete [] buffer;
+			return ret;
+		}
+
+		uncompress((uint8_t *)data, (uLongf *)&size, buffer, zipfsize);
+		delete [] buffer;
 	}
 	else
 	{
-		memcpy(data, buffer, zipfsize);
+		return curPak->getFileData(fileName, data, size, &zipfsize);
 	}
 
-	delete [] buffer;
+	return DPFM_OK;
 }
 
-int deleteFile(const std::string& fileName);
+int PackageMgr::deleteFile(const std::string& fileName)
+{
+	if (fileName.find_first_of('/') == fileName.npos)
+	{
+		return DPFM_FILE_PATH_INVALID;
+	}
+
+	Package* curPak = getPakOfFile(fileName);
+	if (curPak == NULL)
+	{
+		return DPFM_PACK_NOT_EXIST;
+	}
+
+	int ret = curPak->deleteFile(fileName);
+	if (ret != DPFM_OK)
+	{
+		return ret;
+	}
+	
+	return curPak->save();
+}

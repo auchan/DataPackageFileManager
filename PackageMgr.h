@@ -11,28 +11,31 @@ class PackageMgr : public CBrowseDir
 {
 
 public:
-	PackageMgr();
-	~PackageMgr();
+
+	static PackageMgr& getInstance();
 
 	int packDir(const std::string& dirName, const std::string& pakName, bool isZip = false);
 
 	int addFile(const std::string& fileName, const std::string& filePath);
 
-	int addFile(const std::string& fileName, void *data, size_t size, size_t zipSize);
+	int addFile(const std::string& fileName, void *data, size_t size);
 
-	int alterFile(const std::string& fileName, const std::string& filePath);
-
-	int alterFile(const std::string& fileName, void *data, size_t size, size_t zipSize);
-
-	int getFileData(const std::string& fileName, void *data, size_t* size, size_t* zipSize);
+	int getFileData(const std::string& fileName, void *data, size_t *size);
 
 	int deleteFile(const std::string& fileName);
 
 private:
-	virtual bool processFile(const std::string& filename) override; 
+	PackageMgr();
+	~PackageMgr();
+	PackageMgr(const PackageMgr&);
+	PackageMgr& operator=(const PackageMgr&);
 
 private:
-	Package* _curPak;
+	virtual bool processFile(const std::string& filename) override; 
+
+	Package* getPakOfFile(const std::string& filename);
+
+private:
 	std::map<std::string, Package*> _pakMap;
 };
 
