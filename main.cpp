@@ -11,6 +11,11 @@ void Test7();
 void Test8();
 void Test9();
 
+void Test10()
+{
+
+}
+
 int main()
 {
 	//Test1();
@@ -27,7 +32,11 @@ int main()
 	//Test6();
 
 	//Test8();
-	Test9();
+	//Test9();
+	//Test10();
+char i = 1, j = 2;
+
+printf("%0x  %0x", &i, &j);
 }
 
 void Test1()
