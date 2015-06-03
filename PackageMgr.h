@@ -4,6 +4,7 @@
 #include <string>
 #include <map>
 #include "utility/BrowseDir.h"
+#include <cstdint>
 
 class Package;
 
@@ -35,8 +36,14 @@ private:
 
 	Package* getPakOfFile(const std::string& filename);
 
+	uint16_t encryptZipHeader(uint16_t header);
+
+	uint16_t decryptZipHeader(uint16_t enHeader);
 private:
 	std::map<std::string, Package*> _pakMap;
+
+	static const int enBitNum = 16;
+	static const int enShiftNum = 3;
 };
 
 #endif

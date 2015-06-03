@@ -126,6 +126,11 @@ int PackageMgr::addFile(const std::string& fileName, const std::string& filePath
 		compress(buffer2, (uLongf *)&zipfsize, buffer, fsize);
 		delete [] buffer;
 
+		//encrypt////////////////////////////		
+		uint16_t enHeader = encryptZipHeader(*((uint16_t*) buffer2));
+		memcpy(buffer2, &enHeader, sizeof(enHeader));
+		////////////////////////////////////
+
 		int ret = curPak->addFile(fileName, buffer2, fsize, zipfsize);
 		curPak->save();
 
@@ -158,6 +163,11 @@ int PackageMgr::addFile(const std::string& fileName, void *data, size_t size)
 		size_t zipfsize = compressBound(size);
 		uint8_t* buffer = new uint8_t[zipfsize];
 		compress(buffer, (uLongf *)&zipfsize, (uint8_t*)data, size);
+
+		//encrypt////////////////////////////		
+		uint16_t enHeader = encryptZipHeader(*((uint16_t*) buffer));
+		memcpy(buffer, &enHeader, sizeof(enHeader));
+		////////////////////////////////////
 
 		int ret = curPak->addFile(fileName, buffer, size, zipfsize);
 		if (ret != DPFM_OK)
@@ -220,6 +230,11 @@ int PackageMgr::getFileData(const std::string& fileName, void *data, size_t* siz
 			return ret;
 		}
 
+		//decrypt////////////////////////////		
+		uint16_t header = decryptZipHeader(*((uint16_t*) buffer));
+		memcpy(buffer, &header, sizeof(header));
+		////////////////////////////////////
+
 		uncompress((uint8_t *)data, (uLongf *)&size, buffer, zipfsize);
 		delete [] buffer;
 	}
@@ -251,4 +266,14 @@ int PackageMgr::deleteFile(const std::string& fileName)
 	}
 	
 	return curPak->save();
+}
+
+uint16_t PackageMgr::encryptZipHeader(uint16_t header)
+{
+	return (header << (enBitNum - enShiftNum)) | (header >> enShiftNum);
+}
+
+uint16_t PackageMgr::decryptZipHeader(uint16_t enHeader)
+{
+	return (enHeader >> (enBitNum - enShiftNum)) | (enHeader << enShiftNum);
 }
