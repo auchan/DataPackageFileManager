@@ -102,6 +102,8 @@ int PackageMgr::addFile(const std::string& fileName, const std::string& filePath
 	if (curPak->isZip())
 	{
 		ScopeFile sf(filePath);
+		if (sf._fp == NULL)
+			return DPFM_FILE_NOT_EXIST;
 
 		fseek(sf._fp, 0, SEEK_END);
 		size_t fsize = ftell(sf._fp);

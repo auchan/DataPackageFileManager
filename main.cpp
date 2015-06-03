@@ -32,11 +32,8 @@ int main()
 	//Test6();
 
 	//Test8();
-	//Test9();
+	Test9();
 	//Test10();
-char i = 1, j = 2;
-
-printf("%0x  %0x", &i, &j);
 }
 
 void Test1()
@@ -181,12 +178,15 @@ void printFile(PackageMgr& mgr, const std::string filename)
 void Test9()
 {
 	PackageMgr& mgr = PackageMgr::getInstance();
+	
+	int ret;
+	ret = mgr.packDir("TT", "T.pak");
+	//mgr.addFile("T/a.txt", "hi\n", 3);
+	//mgr.addFile("T/b.txt", "hello\n", 6);
+	ret = mgr.addFile("T/hello.txt", "Hello BUPT!", 11);
 
-	//mgr.packDir("T", "T.pak", true);
-	mgr.addFile("T/a.txt", "hi\n", 3);
-	mgr.addFile("T/b.txt", "hello\n", 6);
-
-	printFile(mgr, "T/a.txt");
-	printFile(mgr, "T/b.txt");
+	ret = mgr.deleteFile("T/hello.txt");
+	//printFile(mgr, "TTT/a.txt");
+	//printFile(mgr, "T/b.txt");
 }
 
